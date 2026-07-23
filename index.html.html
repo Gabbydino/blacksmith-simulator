@@ -1,0 +1,1470 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Forja & Bigorna — Blacksmith Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  :root{
+    --bg-deep:#120d0a;
+    --bg-panel:#211810;
+    --bg-panel2:#2a1f15;
+    --iron:#5a5048;
+    --iron-line:#3a322a;
+    --steel:#d9cbb0;
+    --steel-dim:#a89984;
+    --ember:#e8631a;
+    --ember-bright:#ffb347;
+    --gold:#e3b23c;
+    --danger:#b8402f;
+    --good:#7a9a55;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg-deep);overflow:hidden;font-family:'Spectral',serif;color:var(--steel);}
+  #scene-container{position:fixed;inset:0;z-index:0;}
+  #scene-container::after{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(ellipse at 50% 60%, transparent 30%, rgba(10,7,5,0.75) 100%);
+  }
+  h1,h2,h3,.display{font-family:'Cinzel',serif;letter-spacing:0.03em;}
+  #ui{position:fixed;inset:0;z-index:1;display:flex;flex-direction:column;pointer-events:none;}
+  #ui > *{pointer-events:auto;}
+
+  /* ---------- Topbar ---------- */
+  #topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 22px;background:linear-gradient(180deg,rgba(18,13,10,0.95),rgba(18,13,10,0.55));
+    border-bottom:1px solid var(--iron-line);
+  }
+  #topbar .brand{display:flex;align-items:center;gap:10px;}
+  #topbar .brand .anvil-mark{font-size:22px;filter:drop-shadow(0 0 6px rgba(232,99,26,0.6));}
+  #topbar h1{font-size:19px;margin:0;color:var(--ember-bright);font-weight:700;}
+  #topbar .sub{font-size:11px;color:var(--steel-dim);letter-spacing:0.08em;text-transform:uppercase;margin-top:1px;}
+  #stats{display:flex;gap:22px;align-items:center;}
+  .stat{display:flex;flex-direction:column;align-items:flex-end;}
+  .stat .label{font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--steel-dim);}
+  .stat .value{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:17px;}
+  .stat.gold .value{color:var(--gold);}
+  #shop-toggle{
+    background:var(--bg-panel2);border:1px solid var(--iron);color:var(--steel);
+    font-family:'Cinzel',serif;font-size:12.5px;letter-spacing:0.06em;
+    padding:9px 16px;border-radius:3px;cursor:pointer;transition:all .15s;
+  }
+  #shop-toggle:hover{border-color:var(--ember);color:var(--ember-bright);}
+  #mute-toggle, #settings-toggle{
+    background:var(--bg-panel2);border:1px solid var(--iron);color:var(--steel);
+    font-size:15px;width:36px;height:36px;border-radius:3px;cursor:pointer;transition:all .15s;
+    display:flex;align-items:center;justify-content:center;
+  }
+  #mute-toggle:hover, #settings-toggle:hover{border-color:var(--ember);}
+  #combo-badge{
+    font-family:'Cinzel',serif;font-size:11.5px;color:var(--ember-bright);
+    text-align:center;min-height:14px;letter-spacing:0.04em;
+  }
+  #quench-controls{display:none;flex-direction:column;gap:8px;text-align:center;}
+  #quench-controls .hint{font-size:12.5px;color:var(--steel-dim);font-style:italic;}
+  .stats-row{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid rgba(90,80,72,0.2);}
+  .stats-row:last-child{border-bottom:none;}
+  .stats-row .k{color:var(--steel-dim);}
+  .stats-row .v{font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--gold);}
+
+  /* ---------- Settings ---------- */
+  #settings-overlay{position:fixed;inset:0;background:rgba(8,6,4,0.72);display:none;align-items:center;justify-content:center;z-index:10;}
+  #settings-overlay.active{display:flex;}
+  #settings-modal{position:relative;width:min(440px,92vw);max-height:82vh;overflow-y:auto;
+    background:linear-gradient(180deg,#241a12,#1a130d);border:1px solid var(--iron-line);border-radius:8px;
+    padding:24px 26px;box-shadow:0 20px 60px rgba(0,0,0,0.6);}
+  #settings-modal h2{margin:0 0 16px;font-size:20px;color:var(--ember-bright);}
+  #settings-close{position:absolute;top:16px;right:18px;background:none;border:none;color:var(--steel-dim);font-size:20px;cursor:pointer;}
+  .setting-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px 0;border-bottom:1px solid rgba(90,80,72,0.25);}
+  .setting-row:last-child{border-bottom:none;}
+  .setting-row .name{font-size:13.5px;font-weight:600;}
+  .setting-row .desc{font-size:11.5px;color:var(--steel-dim);margin-top:2px;}
+  .toggle-switch{position:relative;width:42px;height:23px;background:#3a322a;border-radius:12px;cursor:pointer;border:1px solid var(--iron);flex-shrink:0;}
+  .toggle-switch.on{background:var(--ember);border-color:#c9531a;}
+  .toggle-switch .knob{position:absolute;top:2px;left:2px;width:17px;height:17px;background:#e8dfd0;border-radius:50%;transition:left .15s;}
+  .toggle-switch.on .knob{left:21px;}
+  input[type=range]{-webkit-appearance:none;width:120px;height:4px;background:var(--iron-line);border-radius:2px;outline:none;flex-shrink:0;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--ember-bright);cursor:pointer;}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--ember-bright);cursor:pointer;border:none;}
+  #btn-reset-progress{background:linear-gradient(180deg,#8a2f22,#5e1c14);border-color:#3d130c;}
+  #save-indicator{font-size:10.5px;color:var(--steel-dim);opacity:0;transition:opacity .35s;letter-spacing:0.04em;}
+  #save-indicator.show{opacity:1;}
+  .reroll-btn{background:none;border:1px solid var(--iron);color:var(--steel-dim);font-size:11px;padding:4px 9px;border-radius:3px;cursor:pointer;transition:all .15s;}
+  .reroll-btn:hover{border-color:var(--ember);color:var(--ember-bright);}
+  .avg-quality{font-size:11.5px;color:var(--steel-dim);text-align:center;min-height:14px;}
+  .upgrade-effect{font-size:10.5px;color:var(--good);margin-top:3px;}
+
+  /* ---------- Bottom dock ---------- */
+  #dock{
+    margin-top:auto;display:flex;justify-content:center;gap:14px;padding:16px 18px 20px;
+  }
+  .panel{
+    background:linear-gradient(180deg,rgba(33,24,16,0.95),rgba(26,19,13,0.92));
+    border:1px solid var(--iron-line);border-radius:6px;padding:16px 18px;
+    box-shadow:0 8px 30px rgba(0,0,0,0.45);
+    backdrop-filter:blur(2px);
+  }
+  #order-panel{width:290px;display:flex;flex-direction:column;gap:10px;}
+  #order-panel h2{font-size:13px;margin:0;color:var(--ember-bright);text-transform:uppercase;letter-spacing:0.08em;}
+  #order-empty{font-size:13.5px;color:var(--steel-dim);font-style:italic;line-height:1.5;}
+  #order-body{display:none;flex-direction:column;gap:8px;}
+  #order-body.active{display:flex;}
+  .order-line{display:flex;justify-content:space-between;font-size:13.5px;}
+  .order-line .k{color:var(--steel-dim);}
+  .order-line .v{font-weight:600;}
+  #order-flavor{font-size:12.5px;font-style:italic;color:var(--steel-dim);border-left:2px solid var(--ember);padding-left:8px;margin:2px 0;}
+  .btn{
+    font-family:'Cinzel',serif;letter-spacing:0.04em;font-size:13px;
+    background:linear-gradient(180deg,#c9531a,#9c3f13);color:#fff2e2;
+    border:1px solid #6e2c0d;border-radius:4px;padding:10px 14px;cursor:pointer;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.15);transition:transform .08s, filter .15s;
+  }
+  .btn:hover:not(:disabled){filter:brightness(1.12);}
+  .btn:active:not(:disabled){transform:translateY(1px);}
+  .btn:disabled{opacity:0.4;cursor:not-allowed;filter:grayscale(0.4);}
+  .btn.secondary{background:linear-gradient(180deg,#3a3128,#241d16);color:var(--steel);border-color:var(--iron);}
+  .btn.wide{width:100%;}
+
+  #forge-panel{width:360px;display:flex;flex-direction:column;gap:12px;}
+  #forge-panel h2{font-size:13px;margin:0;color:var(--ember-bright);text-transform:uppercase;letter-spacing:0.08em;}
+  #forge-idle{font-size:13.5px;color:var(--steel-dim);font-style:italic;}
+  #forge-body{display:none;flex-direction:column;gap:10px;}
+  #forge-body.active{display:flex;}
+
+  .meter-row{display:flex;flex-direction:column;gap:4px;}
+  .meter-label{display:flex;justify-content:space-between;font-size:11px;color:var(--steel-dim);text-transform:uppercase;letter-spacing:0.06em;}
+  .meter{position:relative;height:16px;background:#1b140e;border:1px solid var(--iron-line);border-radius:3px;overflow:hidden;}
+  .meter .zone{position:absolute;top:0;bottom:0;background:rgba(122,154,85,0.35);border-left:1px solid rgba(122,154,85,0.7);border-right:1px solid rgba(122,154,85,0.7);}
+  .meter .fill{position:absolute;left:0;top:0;bottom:0;width:0%;background:linear-gradient(90deg,#5a4a3a,#e8631a,#ffe3a3);transition:width .12s linear;}
+  .meter .marker{position:absolute;top:-3px;bottom:-3px;width:3px;background:#fff2d6;box-shadow:0 0 8px #ffcf7a;}
+
+  #hits-track{display:flex;gap:5px;justify-content:center;margin-top:2px;}
+  .hit-dot{width:9px;height:9px;border-radius:50%;background:#3a322a;border:1px solid var(--iron);}
+  .hit-dot.done{background:var(--ember);box-shadow:0 0 6px var(--ember);}
+
+  #forge-actions{display:flex;gap:8px;}
+  #strike-feedback{text-align:center;font-family:'Cinzel',serif;font-size:13px;min-height:18px;color:var(--ember-bright);}
+
+  #result-body{display:none;flex-direction:column;gap:8px;text-align:center;}
+  #result-body.active{display:flex;}
+  #result-grade{font-family:'Cinzel',serif;font-size:20px;font-weight:900;}
+  #result-price{font-family:'JetBrains Mono',monospace;color:var(--gold);font-size:16px;}
+
+  /* ---------- Toasts ---------- */
+  #toast-container{position:fixed;top:70px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:5;}
+  .toast{
+    background:rgba(26,19,13,0.95);border:1px solid var(--iron-line);border-left:3px solid var(--ember);
+    padding:9px 14px;border-radius:4px;font-size:13px;box-shadow:0 4px 14px rgba(0,0,0,0.4);
+    animation:slidein .25s ease-out;max-width:260px;
+  }
+  .toast.gold{border-left-color:var(--gold);}
+  @keyframes slidein{from{opacity:0;transform:translateX(20px);}to{opacity:1;transform:translateX(0);}}
+
+  /* ---------- Shop modal ---------- */
+  #shop-overlay{position:fixed;inset:0;background:rgba(8,6,4,0.72);display:none;align-items:center;justify-content:center;z-index:10;}
+  #shop-overlay.active{display:flex;}
+  #shop-modal{
+    width:min(680px,92vw);max-height:82vh;overflow-y:auto;
+    background:linear-gradient(180deg,#241a12,#1a130d);border:1px solid var(--iron-line);border-radius:8px;
+    padding:24px 26px;box-shadow:0 20px 60px rgba(0,0,0,0.6);
+  }
+  #shop-modal h2{margin:0 0 2px;font-size:20px;color:var(--ember-bright);}
+  #shop-modal .shop-sub{font-size:12px;color:var(--steel-dim);margin-bottom:18px;}
+  .shop-section{margin-bottom:18px;}
+  .shop-section h3{font-size:12.5px;text-transform:uppercase;letter-spacing:0.08em;color:var(--steel-dim);border-bottom:1px solid var(--iron-line);padding-bottom:6px;margin-bottom:10px;}
+  .shop-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid rgba(90,80,72,0.25);}
+  .shop-item:last-child{border-bottom:none;}
+  .shop-item .info .name{font-weight:600;font-size:14px;}
+  .shop-item .info .desc{font-size:12px;color:var(--steel-dim);margin-top:2px;}
+  .shop-item .info .lvl{font-size:11px;color:var(--ember-bright);margin-top:2px;font-family:'JetBrains Mono',monospace;}
+  .shop-item .buy{display:flex;flex-direction:column;align-items:flex-end;gap:5px;min-width:100px;}
+  .cost{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--gold);}
+  #shop-close{position:absolute;top:16px;right:18px;background:none;border:none;color:var(--steel-dim);font-size:20px;cursor:pointer;}
+  #shop-modal{position:relative;}
+
+  .hidden{display:none !important;}
+
+  @media (max-width:820px){
+    #dock{flex-direction:column;align-items:center;}
+    #order-panel,#forge-panel{width:min(400px,92vw);}
+    #stats{gap:12px;}
+  }
+</style>
+</head>
+<body>
+
+<div id="scene-container"></div>
+
+<div id="ui">
+  <header id="topbar">
+    <div class="brand">
+      <span class="anvil-mark">⚒</span>
+      <div>
+        <h1>Forja & Bigorna</h1>
+        <div class="sub">Oficina do Ferreiro</div>
+      </div>
+    </div>
+    <div id="stats">
+      <div class="stat">
+        <div class="label">Dia</div>
+        <div class="value" id="stat-day">1</div>
+      </div>
+      <div class="stat">
+        <div class="label">Oficina</div>
+        <div class="value" id="stat-level">Nível 1</div>
+      </div>
+      <div class="stat gold">
+        <div class="label">Moedas</div>
+        <div class="value" id="stat-gold">50</div>
+      </div>
+      <span id="save-indicator">💾 Salvo</span>
+      <button id="mute-toggle" title="Som">🔊</button>
+      <button id="settings-toggle" title="Configurações">🔧</button>
+      <button id="shop-toggle">⚙ Oficina</button>
+    </div>
+  </header>
+
+  <div id="dock">
+    <section id="order-panel" class="panel">
+      <h2>Encomenda</h2>
+      <div id="order-empty">Nenhum aventureiro na fila. Chame o próximo cliente para começar a forjar.</div>
+      <div id="order-body">
+        <div id="order-flavor"></div>
+        <div class="order-line"><span class="k">Item pedido</span><span class="v" id="order-weapon">—</span></div>
+        <div class="order-line"><span class="k">Recompensa base</span><span class="v" id="order-reward">—</span></div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn wide" id="btn-start-forge" style="flex:1;">Começar a Forjar</button>
+          <button class="reroll-btn" id="btn-reroll" title="Chamar outro cliente">🔁 Trocar</button>
+        </div>
+      </div>
+      <button class="btn secondary wide" id="btn-next-client">Chamar Próximo Aventureiro</button>
+    </section>
+
+    <section id="forge-panel" class="panel">
+      <h2 id="forge-title">Forja</h2>
+      <div id="forge-idle">Aqueça o metal e martele no ritmo certo para forjar uma arma de qualidade.</div>
+
+      <div id="forge-body">
+        <div class="meter-row">
+          <div class="meter-label"><span>Temperatura do Metal</span><span id="heat-pct">0%</span></div>
+          <div class="meter"><div class="zone" id="heat-zone"></div><div class="fill" id="heat-fill"></div></div>
+        </div>
+        <div id="heat-controls" style="display:flex;gap:8px;">
+          <button class="btn wide" id="btn-pump">🔥 Bombear o Fole</button>
+          <button class="btn secondary wide" id="btn-to-anvil" disabled>Levar à Bigorna →</button>
+        </div>
+
+        <div id="hammer-controls" style="display:none;flex-direction:column;gap:8px;">
+          <div class="meter-row">
+            <div class="meter-label"><span>Golpe na Bigorna — acerte a zona verde</span><span id="hit-count">0/0</span></div>
+            <div class="meter"><div class="zone" id="strike-zone"></div><div class="marker" id="strike-marker"></div></div>
+          </div>
+          <div id="hits-track"></div>
+          <div id="strike-feedback"></div>
+          <div id="combo-badge"></div>
+          <div class="avg-quality" id="avg-quality"></div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn wide" id="btn-strike">🔨 GOLPEAR</button>
+          </div>
+        </div>
+
+        <div id="quench-controls">
+          <div class="hint">A peça está pronta para ser temperada.</div>
+          <button class="btn wide" id="btn-quench">💧 Temperar na Água</button>
+        </div>
+
+        <div id="result-body">
+          <div class="display" id="result-grade">—</div>
+          <div id="result-price">—</div>
+          <button class="btn wide" id="btn-sell">Vender Arma</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<div id="shop-overlay">
+  <div id="shop-modal">
+    <button id="shop-close">✕</button>
+    <h2>Oficina do Ferreiro</h2>
+    <div class="shop-sub">Invista suas moedas em melhorias permanentes.</div>
+
+    <div class="shop-section">
+      <h3>Equipamentos</h3>
+      <div class="shop-item">
+        <div class="info">
+          <div class="name">Fole da Forja</div>
+          <div class="desc">Aquece o metal mais rápido a cada bombeada.</div>
+          <div class="lvl">Nível <span id="lvl-forge">1</span></div>
+          <div class="upgrade-effect" id="effect-forge"></div>
+        </div>
+        <div class="buy">
+          <span class="cost" id="cost-forge">40</span>
+          <button class="btn secondary" id="buy-forge">Melhorar</button>
+        </div>
+      </div>
+      <div class="shop-item">
+        <div class="info">
+          <div class="name">Bigorna</div>
+          <div class="desc">Aumenta a zona de acerto ao martelar.</div>
+          <div class="lvl">Nível <span id="lvl-anvil">1</span></div>
+          <div class="upgrade-effect" id="effect-anvil"></div>
+        </div>
+        <div class="buy">
+          <span class="cost" id="cost-anvil">50</span>
+          <button class="btn secondary" id="buy-anvil">Melhorar</button>
+        </div>
+      </div>
+      <div class="shop-item">
+        <div class="info">
+          <div class="name">Martelo</div>
+          <div class="desc">Cada golpe rende mais qualidade.</div>
+          <div class="lvl">Nível <span id="lvl-hammer">1</span></div>
+          <div class="upgrade-effect" id="effect-hammer"></div>
+        </div>
+        <div class="buy">
+          <span class="cost" id="cost-hammer">60</span>
+          <button class="btn secondary" id="buy-hammer">Melhorar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="shop-section">
+      <h3>Expansão da Oficina</h3>
+      <div class="shop-item">
+        <div class="info">
+          <div class="name" id="expand-name">Expandir Oficina</div>
+          <div class="desc" id="expand-desc">Desbloqueia novos tipos de arma e aumenta seus preços de venda.</div>
+          <div class="lvl">Nível atual: <span id="lvl-workshop">1</span></div>
+        </div>
+        <div class="buy">
+          <span class="cost" id="cost-workshop">150</span>
+          <button class="btn secondary" id="buy-workshop">Expandir</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="shop-section">
+      <h3>Estatísticas</h3>
+      <div class="stats-row"><span class="k">Armas forjadas</span><span class="v" id="stat-forged">0</span></div>
+      <div class="stats-row"><span class="k">Ganho total (vitalício)</span><span class="v" id="stat-earned">0</span></div>
+      <div class="stats-row"><span class="k">Melhor venda</span><span class="v" id="stat-best">0</span></div>
+    </div>
+  </div>
+</div>
+
+<div id="settings-overlay">
+  <div id="settings-modal">
+    <button id="settings-close">✕</button>
+    <h2>Configurações</h2>
+
+    <div class="setting-row">
+      <div>
+        <div class="name">Volume</div>
+        <div class="desc">Efeitos sonoros e ambiente da forja.</div>
+      </div>
+      <input type="range" id="volume-slider" min="0" max="100" value="70">
+    </div>
+
+    <div class="setting-row">
+      <div>
+        <div class="name">Reduzir movimento</div>
+        <div class="desc">Desativa tremor de câmera e balanço da cena.</div>
+      </div>
+      <div class="toggle-switch" id="toggle-reduce-motion"><div class="knob"></div></div>
+    </div>
+
+    <div class="setting-row">
+      <div>
+        <div class="name">Chamar cliente automaticamente</div>
+        <div class="desc">Após vender, o próximo aventureiro chega sozinho.</div>
+      </div>
+      <div class="toggle-switch" id="toggle-auto-next"><div class="knob"></div></div>
+    </div>
+
+    <div class="setting-row">
+      <div>
+        <div class="name">Vibração ao martelar</div>
+        <div class="desc">Feedback tátil em dispositivos compatíveis.</div>
+      </div>
+      <div class="toggle-switch" id="toggle-haptics"><div class="knob"></div></div>
+    </div>
+
+    <div class="setting-row">
+      <div>
+        <div class="name">Reiniciar Progresso</div>
+        <div class="desc">Apaga moedas, upgrades e estatísticas salvas.</div>
+      </div>
+      <button class="btn" id="btn-reset-progress">Reiniciar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ============================= GAME DATA ============================= */
+  const WEAPONS = {
+    dagger:      { name:"Adaga",              hits:3,  base:16, unlockLevel:1 },
+    sword:       { name:"Espada Curta",       hits:5,  base:32, unlockLevel:1 },
+    axe:         { name:"Machado de Batalha", hits:6,  base:52, unlockLevel:2 },
+    warhammer:   { name:"Martelo de Guerra",  hits:8,  base:78, unlockLevel:3 },
+    greatsword:  { name:"Espadão",            hits:10, base:115,unlockLevel:4 }
+  };
+
+  const ADVENTURERS = [
+    "Um mercenário coberto de cicatrizes", "Uma arqueira élfica silenciosa",
+    "Um paladino em armadura reluzente", "Um caçador de recompensas apressado",
+    "Uma jovem aventureira ansiosa", "Um anão veterano de guerra",
+    "Um mago que odeia espadas afiadas demais", "Uma guerreira bárbara imponente",
+    "Um explorador cansado de estrada", "Um cavaleiro errante"
+  ];
+
+  const GRADES = [
+    { min:0,  name:"Malfeita",  mult:0.5, color:"#b8402f" },
+    { min:40, name:"Comum",     mult:0.85,color:"#a89984" },
+    { min:62, name:"Boa",       mult:1.15,color:"#7a9a55" },
+    { min:80, name:"Excelente", mult:1.6, color:"#e3b23c" },
+    { min:93, name:"Lendária",  mult:2.3, color:"#ffb347" }
+  ];
+
+  function gradeFor(q){
+    let g = GRADES[0];
+    for(const cand of GRADES){ if(q >= cand.min) g = cand; }
+    return g;
+  }
+
+  /* ============================= STATE ============================= */
+  const state = {
+    gold: 50,
+    day: 1,
+    salesToday: 0,
+    upgrades: { forge:1, anvil:1, hammer:1 },
+    workshopLevel: 1,
+    order: null,
+    forging: null,
+    stats: { forged:0, earned:0, best:0 },
+    settings: {
+      volume: 0.7,
+      reduceMotion: !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches),
+      autoNextClient: false,
+      haptics: true
+    }
+  };
+
+  function unlockedWeapons(){
+    return Object.entries(WEAPONS).filter(([k,w]) => w.unlockLevel <= state.workshopLevel).map(([k])=>k);
+  }
+
+  /* ============================= COSTS ============================= */
+  function costForge(){ return Math.round(40 * Math.pow(state.upgrades.forge, 1.55)); }
+  function costAnvil(){ return Math.round(50 * Math.pow(state.upgrades.anvil, 1.55)); }
+  function costHammer(){ return Math.round(60 * Math.pow(state.upgrades.hammer, 1.55)); }
+  function costWorkshop(){ return Math.round(150 * Math.pow(state.workshopLevel, 1.8)); }
+
+  /* ============================= DOM REFS ============================= */
+  const $ = id => document.getElementById(id);
+  const el = {
+    statDay: $('stat-day'), statLevel: $('stat-level'), statGold: $('stat-gold'),
+    orderEmpty: $('order-empty'), orderBody: $('order-body'), orderFlavor: $('order-flavor'),
+    orderWeapon: $('order-weapon'), orderReward: $('order-reward'),
+    btnStartForge: $('btn-start-forge'), btnNextClient: $('btn-next-client'),
+    forgeTitle: $('forge-title'), forgeIdle: $('forge-idle'), forgeBody: $('forge-body'),
+    heatFill: $('heat-fill'), heatZone: $('heat-zone'), heatPct: $('heat-pct'),
+    btnPump: $('btn-pump'), btnToAnvil: $('btn-to-anvil'),
+    heatControls: $('heat-controls'), hammerControls: $('hammer-controls'),
+    strikeZone: $('strike-zone'), strikeMarker: $('strike-marker'),
+    hitCount: $('hit-count'), hitsTrack: $('hits-track'), strikeFeedback: $('strike-feedback'),
+    comboBadge: $('combo-badge'),
+    btnStrike: $('btn-strike'),
+    quenchControls: $('quench-controls'), btnQuench: $('btn-quench'),
+    resultBody: $('result-body'), resultGrade: $('result-grade'), resultPrice: $('result-price'),
+    btnSell: $('btn-sell'),
+    shopOverlay: $('shop-overlay'), shopToggle: $('shop-toggle'), shopClose: $('shop-close'),
+    lvlForge: $('lvl-forge'), lvlAnvil: $('lvl-anvil'), lvlHammer: $('lvl-hammer'), lvlWorkshop: $('lvl-workshop'),
+    costForge: $('cost-forge'), costAnvil: $('cost-anvil'), costHammer: $('cost-hammer'), costWorkshop: $('cost-workshop'),
+    buyForge: $('buy-forge'), buyAnvil: $('buy-anvil'), buyHammer: $('buy-hammer'), buyWorkshop: $('buy-workshop'),
+    expandDesc: $('expand-desc'),
+    toastContainer: $('toast-container'),
+    muteToggle: $('mute-toggle'),
+    statForged: $('stat-forged'), statEarned: $('stat-earned'), statBest: $('stat-best'),
+    saveIndicator: $('save-indicator'),
+    settingsToggle: $('settings-toggle'), settingsOverlay: $('settings-overlay'), settingsClose: $('settings-close'),
+    volumeSlider: $('volume-slider'),
+    toggleReduceMotion: $('toggle-reduce-motion'), toggleAutoNext: $('toggle-auto-next'), toggleHaptics: $('toggle-haptics'),
+    btnResetProgress: $('btn-reset-progress'),
+    btnReroll: $('btn-reroll'),
+    avgQuality: $('avg-quality'),
+    effectForge: $('effect-forge'), effectAnvil: $('effect-anvil'), effectHammer: $('effect-hammer')
+  };
+
+  /* ============================= SAVE / LOAD ============================= */
+  const STORAGE_KEY = 'blacksmith-sim-save-v1';
+  let storageWarned = false;
+
+  function saveGame(){
+    try{
+      const data = {
+        gold: state.gold, day: state.day, salesToday: state.salesToday,
+        upgrades: state.upgrades, workshopLevel: state.workshopLevel,
+        stats: state.stats, settings: state.settings
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      flashSaveIndicator();
+    }catch(e){
+      if(!storageWarned){
+        storageWarned = true;
+        toast('Este navegador não permite salvar o progresso automaticamente.', null);
+      }
+    }
+  }
+
+  function loadGame(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) return false;
+      const data = JSON.parse(raw);
+      if(typeof data.gold === 'number') state.gold = data.gold;
+      if(typeof data.day === 'number') state.day = data.day;
+      if(typeof data.salesToday === 'number') state.salesToday = data.salesToday;
+      if(data.upgrades) Object.assign(state.upgrades, data.upgrades);
+      if(typeof data.workshopLevel === 'number') state.workshopLevel = data.workshopLevel;
+      if(data.stats) Object.assign(state.stats, data.stats);
+      if(data.settings) Object.assign(state.settings, data.settings);
+      return true;
+    }catch(e){
+      return false;
+    }
+  }
+
+  function flashSaveIndicator(){
+    el.saveIndicator.classList.add('show');
+    clearTimeout(flashSaveIndicator._t);
+    flashSaveIndicator._t = setTimeout(() => el.saveIndicator.classList.remove('show'), 1200);
+  }
+
+  el.btnResetProgress.addEventListener('click', () => {
+    const ok = window.confirm('Isso vai apagar moedas, upgrades e estatísticas salvas. Deseja continuar?');
+    if(!ok) return;
+    try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
+    location.reload();
+  });
+
+  function toast(msg, kind){
+    const t = document.createElement('div');
+    t.className = 'toast' + (kind ? ' '+kind : '');
+    t.textContent = msg;
+    el.toastContainer.appendChild(t);
+    setTimeout(()=>{ t.style.transition='opacity .4s'; t.style.opacity='0'; setTimeout(()=>t.remove(),400); }, 3200);
+  }
+
+  /* ============================= AUDIO ============================= */
+  let audioCtx = null, masterGain = null, muted = false, ambientStarted = false;
+
+  function noiseBuffer(duration){
+    const sr = audioCtx.sampleRate;
+    const buf = audioCtx.createBuffer(1, Math.max(1, Math.floor(sr*duration)), sr);
+    const data = buf.getChannelData(0);
+    for(let i=0;i<data.length;i++) data[i] = Math.random()*2-1;
+    return buf;
+  }
+
+  function ensureAudio(){
+    if(!audioCtx){
+      audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = muted ? 0 : state.settings.volume;
+      masterGain.connect(audioCtx.destination);
+    }
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    if(!ambientStarted){ ambientStarted = true; startAmbient(); }
+  }
+
+  function startAmbient(){
+    const src = audioCtx.createBufferSource();
+    src.buffer = noiseBuffer(2.0);
+    src.loop = true;
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'bandpass'; filter.frequency.value = 700; filter.Q.value = 0.6;
+    const g = audioCtx.createGain(); g.gain.value = 0.045;
+    src.connect(filter); filter.connect(g); g.connect(masterGain);
+    src.start();
+  }
+
+  function setMuted(m){
+    muted = m;
+    if(masterGain) masterGain.gain.setTargetAtTime(muted?0:state.settings.volume, audioCtx.currentTime, 0.05);
+    el.muteToggle.textContent = muted ? '🔇' : '🔊';
+  }
+
+  function playClang(quality){
+    ensureAudio();
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    osc.type = 'triangle';
+    const freq = 260 + quality*4;
+    osc.frequency.setValueAtTime(freq, t);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(40,freq*0.6), t+0.18);
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.22 + quality/450, t+0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, t+0.25);
+    osc.connect(g); g.connect(masterGain);
+    osc.start(t); osc.stop(t+0.26);
+
+    const src = audioCtx.createBufferSource();
+    src.buffer = noiseBuffer(0.08);
+    const bp = audioCtx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 1700 + quality*3; bp.Q.value = 1.2;
+    const ng = audioCtx.createGain();
+    ng.gain.setValueAtTime(0.3, t);
+    ng.gain.exponentialRampToValueAtTime(0.001, t+0.09);
+    src.connect(bp); bp.connect(ng); ng.connect(masterGain);
+    src.start(t);
+  }
+
+  function playWhoosh(){
+    ensureAudio();
+    const t = audioCtx.currentTime;
+    const src = audioCtx.createBufferSource();
+    src.buffer = noiseBuffer(0.3);
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(300, t);
+    filter.frequency.linearRampToValueAtTime(1400, t+0.22);
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.22, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t+0.3);
+    src.connect(filter); filter.connect(g); g.connect(masterGain);
+    src.start(t);
+  }
+
+  function playCoin(){
+    ensureAudio();
+    const t = audioCtx.currentTime;
+    [880, 1320].forEach((f,i)=>{
+      const osc = audioCtx.createOscillator();
+      osc.type = 'sine'; osc.frequency.value = f;
+      const g = audioCtx.createGain();
+      g.gain.setValueAtTime(0.0001, t+i*0.07);
+      g.gain.linearRampToValueAtTime(0.2, t+i*0.07+0.01);
+      g.gain.exponentialRampToValueAtTime(0.001, t+i*0.07+0.22);
+      osc.connect(g); g.connect(masterGain);
+      osc.start(t+i*0.07); osc.stop(t+i*0.07+0.24);
+    });
+  }
+
+  function playSizzle(){
+    ensureAudio();
+    const t = audioCtx.currentTime;
+    const src = audioCtx.createBufferSource();
+    src.buffer = noiseBuffer(0.7);
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'highpass'; filter.frequency.value = 2200;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.28, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t+0.65);
+    src.connect(filter); filter.connect(g); g.connect(masterGain);
+    src.start(t);
+  }
+
+  el.muteToggle.addEventListener('click', () => setMuted(!muted));
+
+  /* ============================= SETTINGS UI ============================= */
+  function renderSettings(){
+    el.volumeSlider.value = Math.round(state.settings.volume*100);
+    el.toggleReduceMotion.classList.toggle('on', state.settings.reduceMotion);
+    el.toggleAutoNext.classList.toggle('on', state.settings.autoNextClient);
+    el.toggleHaptics.classList.toggle('on', state.settings.haptics);
+  }
+
+  el.settingsToggle.addEventListener('click', () => { renderSettings(); el.settingsOverlay.classList.add('active'); });
+  el.settingsClose.addEventListener('click', () => el.settingsOverlay.classList.remove('active'));
+  el.settingsOverlay.addEventListener('click', (e) => { if(e.target === el.settingsOverlay) el.settingsOverlay.classList.remove('active'); });
+
+  el.volumeSlider.addEventListener('input', () => {
+    state.settings.volume = el.volumeSlider.value / 100;
+    if(masterGain && !muted) masterGain.gain.setTargetAtTime(state.settings.volume, audioCtx.currentTime, 0.05);
+  });
+  el.volumeSlider.addEventListener('change', saveGame);
+
+  el.toggleReduceMotion.addEventListener('click', () => {
+    state.settings.reduceMotion = !state.settings.reduceMotion;
+    el.toggleReduceMotion.classList.toggle('on', state.settings.reduceMotion);
+    saveGame();
+  });
+  el.toggleAutoNext.addEventListener('click', () => {
+    state.settings.autoNextClient = !state.settings.autoNextClient;
+    el.toggleAutoNext.classList.toggle('on', state.settings.autoNextClient);
+    saveGame();
+  });
+  el.toggleHaptics.addEventListener('click', () => {
+    state.settings.haptics = !state.settings.haptics;
+    el.toggleHaptics.classList.toggle('on', state.settings.haptics);
+    saveGame();
+  });
+
+  /* ============================= RENDER UI ============================= */
+  function renderTop(){
+    el.statDay.textContent = state.day;
+    el.statLevel.textContent = 'Nível ' + state.workshopLevel;
+    el.statGold.textContent = state.gold;
+  }
+
+  function renderShop(){
+    el.lvlForge.textContent = state.upgrades.forge;
+    el.lvlAnvil.textContent = state.upgrades.anvil;
+    el.lvlHammer.textContent = state.upgrades.hammer;
+    el.lvlWorkshop.textContent = state.workshopLevel;
+    el.costForge.textContent = costForge() + ' moedas';
+    el.costAnvil.textContent = costAnvil() + ' moedas';
+    el.costHammer.textContent = costHammer() + ' moedas';
+    el.costWorkshop.textContent = costWorkshop() + ' moedas';
+    el.buyForge.disabled = state.gold < costForge();
+    el.buyAnvil.disabled = state.gold < costAnvil();
+    el.buyHammer.disabled = state.gold < costHammer();
+    el.buyWorkshop.disabled = state.gold < costWorkshop();
+    const nextUnlock = Object.entries(WEAPONS).find(([k,w]) => w.unlockLevel === state.workshopLevel + 1);
+    el.expandDesc.textContent = nextUnlock
+      ? `Desbloqueia: ${nextUnlock[1].name}. Também aumenta o valor de todas as vendas.`
+      : `Aumenta ainda mais o valor de todas as vendas.`;
+    el.statForged.textContent = state.stats.forged;
+    el.statEarned.textContent = state.stats.earned;
+    el.statBest.textContent = state.stats.best;
+
+    const curPump = (7 + state.upgrades.forge*2.2).toFixed(1);
+    const nextPump = (7 + (state.upgrades.forge+1)*2.2).toFixed(1);
+    el.effectForge.textContent = `+${curPump} de calor por bombeada agora → +${nextPump} no próximo nível`;
+
+    const curZone = (14 + state.upgrades.anvil*3.4).toFixed(0);
+    const nextZone = (14 + (state.upgrades.anvil+1)*3.4).toFixed(0);
+    el.effectAnvil.textContent = `Zona de acerto: ${curZone}% agora → ${nextZone}% no próximo nível`;
+
+    const curBonus = (state.upgrades.hammer*2);
+    const nextBonus = ((state.upgrades.hammer+1)*2);
+    el.effectHammer.textContent = `+${curBonus} de qualidade por golpe agora → +${nextBonus} no próximo nível`;
+  }
+
+  function renderOrderIdle(){
+    el.orderEmpty.style.display = state.order ? 'none' : 'block';
+    el.orderBody.classList.toggle('active', !!state.order);
+    el.btnNextClient.style.display = state.order ? 'none' : 'block';
+  }
+
+  /* ============================= ORDER FLOW ============================= */
+  function generateOrder(){
+    const options = unlockedWeapons();
+    const key = options[Math.floor(Math.random()*options.length)];
+    const w = WEAPONS[key];
+    const flavor = ADVENTURERS[Math.floor(Math.random()*ADVENTURERS.length)];
+    state.order = { key, w, flavor };
+    el.orderFlavor.textContent = flavor + ' pede um item.';
+    el.orderWeapon.textContent = w.name;
+    el.orderReward.textContent = '~' + Math.round(w.base * (1+state.workshopLevel*0.05)) + ' moedas';
+    renderOrderIdle();
+  }
+
+  el.btnNextClient.addEventListener('click', () => {
+    if(state.forging) return;
+    generateOrder();
+  });
+
+  el.btnReroll.addEventListener('click', () => {
+    if(state.forging) return;
+    generateOrder();
+  });
+
+  /* ============================= FORGING ============================= */
+  let heatTimer = null;
+  let hammerRAF = null;
+  let markerPos = 50;
+  let markerDir = 1;
+  let zoneCenter = 50;
+  let zoneWidth = 20;
+
+  function startForge(){
+    if(!state.order) return;
+    const w = state.order.w;
+    state.forging = {
+      key: state.order.key, w,
+      heat: 15,
+      phase: 'heating',
+      hitsDone: 0,
+      hitsRequired: w.hits,
+      qualitySum: 0,
+      overheated: false,
+      combo: 0
+    };
+    el.forgeTitle.textContent = 'Forjando: ' + w.name;
+    el.forgeIdle.style.display = 'none';
+    el.forgeBody.classList.add('active');
+    el.heatControls.style.display = 'flex';
+    el.hammerControls.style.display = 'none';
+    el.quenchControls.style.display = 'none';
+    el.comboBadge.textContent = '';
+    el.strikeFeedback.textContent = '';
+    el.resultBody.classList.remove('active');
+    el.orderBody.classList.remove('active');
+    el.orderEmpty.style.display = 'none';
+    el.btnNextClient.style.display = 'none';
+    el.avgQuality.textContent = '';
+    setMetalKind(state.order.key);
+
+    const zoneLo = 62, zoneHi = 88;
+    el.heatZone.style.left = zoneLo + '%';
+    el.heatZone.style.width = (zoneHi-zoneLo) + '%';
+
+    updateHeatUI();
+    startHeatDecay();
+
+    buildHitsTrack();
+  }
+
+  el.btnStartForge.addEventListener('click', startForge);
+
+  function startHeatDecay(){
+    if(heatTimer) clearInterval(heatTimer);
+    heatTimer = setInterval(() => {
+      if(!state.forging || state.forging.phase !== 'heating') return;
+      state.forging.heat = Math.max(0, state.forging.heat - 1.2);
+      updateHeatUI();
+    }, 250);
+  }
+
+  // Pause heat decay while the tab is hidden so players aren't punished for tabbing away
+  document.addEventListener('visibilitychange', () => {
+    if(document.hidden){
+      if(heatTimer){ clearInterval(heatTimer); heatTimer = null; }
+    } else if(state.forging && state.forging.phase === 'heating' && !heatTimer){
+      startHeatDecay();
+    }
+  });
+
+  function updateHeatUI(){
+    const f = state.forging;
+    if(!f) return;
+    el.heatFill.style.width = f.heat + '%';
+    el.heatPct.textContent = Math.round(f.heat) + '%';
+    const inZone = f.heat >= 62 && f.heat <= 88;
+    el.btnToAnvil.disabled = !inZone;
+    if(f.heat > 96 && !f.overheated){
+      f.overheated = true;
+      toast('O metal superaqueceu! A qualidade final será penalizada.', 'danger');
+    }
+  }
+
+  el.btnPump.addEventListener('click', () => {
+    const f = state.forging;
+    if(!f || f.phase !== 'heating') return;
+    f.heat = Math.min(100, f.heat + 7 + state.upgrades.forge*2.2);
+    updateHeatUI();
+    playWhoosh();
+  });
+
+  el.btnToAnvil.addEventListener('click', () => {
+    const f = state.forging;
+    if(!f) return;
+    f.phase = 'hammering';
+    el.heatControls.style.display = 'none';
+    el.hammerControls.style.display = 'flex';
+    startHammerLoop();
+    triggerHammerSwing();
+  });
+
+  function buildHitsTrack(){
+    el.hitsTrack.innerHTML = '';
+    const f = state.forging;
+    for(let i=0;i<f.hitsRequired;i++){
+      const d = document.createElement('div');
+      d.className = 'hit-dot';
+      el.hitsTrack.appendChild(d);
+    }
+    el.hitCount.textContent = '0/' + f.hitsRequired;
+  }
+
+  function newZone(){
+    zoneWidth = 14 + state.upgrades.anvil * 3.4;
+    zoneCenter = 15 + Math.random() * (85 - 15 - zoneWidth) + zoneWidth/2;
+    el.strikeZone.style.left = (zoneCenter - zoneWidth/2) + '%';
+    el.strikeZone.style.width = zoneWidth + '%';
+  }
+
+  function startHammerLoop(){
+    newZone();
+    markerPos = 5;
+    markerDir = 1;
+    let t = 0;
+    const speedBase = 1.6;
+    function step(){
+      const f = state.forging;
+      if(!f || f.phase !== 'hammering'){ hammerRAF = null; return; }
+      t += 0.016;
+      const speed = speedBase + (f.hitsDone*0.12);
+      markerPos = 50 + 47*Math.sin(t*speed);
+      el.strikeMarker.style.left = markerPos + '%';
+      hammerRAF = requestAnimationFrame(step);
+    }
+    if(hammerRAF) cancelAnimationFrame(hammerRAF);
+    hammerRAF = requestAnimationFrame(step);
+  }
+
+  el.btnStrike.addEventListener('click', () => {
+    const f = state.forging;
+    if(!f || f.phase !== 'hammering') return;
+    const dist = Math.abs(markerPos - zoneCenter);
+    const halfZone = zoneWidth/2;
+    let quality;
+    let msg, cls;
+    if(dist <= halfZone*0.28){ quality = 100; msg='PERFEITO!'; cls='#ffb347'; }
+    else if(dist <= halfZone*0.65){ quality = 78 + Math.random()*12; msg='Ótimo golpe'; cls='#e3b23c'; }
+    else if(dist <= halfZone){ quality = 50 + Math.random()*15; msg='Bom golpe'; cls='#7a9a55'; }
+    else if(dist <= halfZone*1.8){ quality = 20 + Math.random()*15; msg='Golpe fraco'; cls='#a89984'; }
+    else { quality = Math.max(2, 12 - dist*0.1); msg='Errou a bigorna!'; cls='#b8402f'; }
+
+    const tierGood = (msg === 'PERFEITO!' || msg === 'Ótimo golpe');
+    f.combo = tierGood ? (f.combo||0) + 1 : 0;
+    const comboMult = 1 + Math.min(f.combo*0.03, 0.18);
+
+    quality = Math.min(100, quality*comboMult + state.upgrades.hammer*2);
+    f.qualitySum += quality;
+    f.hitsDone++;
+    f.heat -= 11;
+
+    el.strikeFeedback.textContent = msg;
+    el.strikeFeedback.style.color = cls;
+    el.comboBadge.textContent = f.combo >= 2 ? ('🔥 Combo x' + f.combo) : '';
+    el.avgQuality.textContent = 'Qualidade média: ' + Math.round(f.qualitySum / f.hitsDone) + '%';
+    triggerSparks(quality >= 70);
+    triggerHammerSwing();
+    triggerShake(quality >= 92 ? 0.16 : (quality >= 70 ? 0.08 : 0.03));
+    playClang(quality);
+    if(state.settings.haptics && navigator.vibrate) navigator.vibrate(quality >= 92 ? 35 : (quality >= 70 ? 16 : 8));
+
+    const dots = el.hitsTrack.children;
+    if(dots[f.hitsDone-1]) dots[f.hitsDone-1].classList.add('done');
+    el.hitCount.textContent = f.hitsDone + '/' + f.hitsRequired;
+
+    if(f.hitsDone >= f.hitsRequired){
+      showQuench();
+      return;
+    }
+
+    if(f.heat < 28){
+      f.phase = 'reheat-needed';
+      el.hammerControls.style.display = 'none';
+      el.heatControls.style.display = 'flex';
+      el.btnToAnvil.disabled = true;
+      toast('O metal esfriou demais. Reaqueça antes de continuar.', null);
+      updateHeatUI();
+      f.phase = 'heating';
+    } else {
+      newZone();
+    }
+  });
+
+  function showQuench(){
+    const f = state.forging;
+    f.phase = 'quenching';
+    el.hammerControls.style.display = 'none';
+    el.quenchControls.style.display = 'flex';
+    el.comboBadge.textContent = '';
+    triggerDip();
+  }
+
+  el.btnQuench.addEventListener('click', () => {
+    const f = state.forging;
+    if(!f || f.phase !== 'quenching') return;
+    playSizzle();
+    triggerSteam();
+    el.quenchControls.style.display = 'none';
+    setTimeout(finishForge, 350);
+  });
+
+  function finishForge(){
+    const f = state.forging;
+    f.phase = 'done';
+    el.hammerControls.style.display = 'none';
+    el.quenchControls.style.display = 'none';
+    let avgQ = f.qualitySum / f.hitsRequired;
+    if(f.overheated) avgQ *= 0.75;
+    avgQ = Math.max(0, Math.min(100, avgQ));
+
+    const grade = gradeFor(avgQ);
+    const price = Math.round(f.w.base * grade.mult * (1 + state.workshopLevel*0.05));
+
+    el.resultGrade.textContent = f.w.name + ' — ' + grade.name;
+    el.resultGrade.style.color = grade.color;
+    el.resultPrice.textContent = price + ' moedas';
+    el.resultBody.classList.add('active');
+
+    el.resultBody.dataset.price = price;
+  }
+
+  el.btnSell.addEventListener('click', () => {
+    const price = parseInt(el.resultBody.dataset.price || '0', 10);
+    state.gold += price;
+    state.salesToday++;
+    state.stats.forged++;
+    state.stats.earned += price;
+    state.stats.best = Math.max(state.stats.best, price);
+    if(state.salesToday % 4 === 0) state.day++;
+    toast('+' + price + ' moedas pela venda!', 'gold');
+    playCoin();
+    renderTop();
+    renderShop();
+    resetMetalToIngot();
+
+    state.forging = null;
+    state.order = null;
+    if(heatTimer){ clearInterval(heatTimer); heatTimer = null; }
+    if(hammerRAF){ cancelAnimationFrame(hammerRAF); hammerRAF = null; }
+
+    el.forgeTitle.textContent = 'Forja';
+    el.forgeIdle.style.display = 'block';
+    el.forgeBody.classList.remove('active');
+    el.resultBody.classList.remove('active');
+    renderOrderIdle();
+    saveGame();
+
+    if(state.settings.autoNextClient){
+      setTimeout(() => { if(!state.forging) generateOrder(); }, 900);
+    }
+  });
+
+  /* ============================= SHOP ============================= */
+  el.shopToggle.addEventListener('click', () => { renderShop(); el.shopOverlay.classList.add('active'); });
+  el.shopClose.addEventListener('click', () => el.shopOverlay.classList.remove('active'));
+  el.shopOverlay.addEventListener('click', (e) => { if(e.target === el.shopOverlay) el.shopOverlay.classList.remove('active'); });
+
+  el.buyForge.addEventListener('click', () => {
+    const c = costForge();
+    if(state.gold < c) return;
+    state.gold -= c; state.upgrades.forge++;
+    toast('Fole melhorado! Nível ' + state.upgrades.forge, null);
+    renderTop(); renderShop(); saveGame();
+  });
+  el.buyAnvil.addEventListener('click', () => {
+    const c = costAnvil();
+    if(state.gold < c) return;
+    state.gold -= c; state.upgrades.anvil++;
+    toast('Bigorna melhorada! Nível ' + state.upgrades.anvil, null);
+    renderTop(); renderShop(); saveGame();
+  });
+  el.buyHammer.addEventListener('click', () => {
+    const c = costHammer();
+    if(state.gold < c) return;
+    state.gold -= c; state.upgrades.hammer++;
+    toast('Martelo melhorado! Nível ' + state.upgrades.hammer, null);
+    renderTop(); renderShop(); saveGame();
+  });
+  el.buyWorkshop.addEventListener('click', () => {
+    const c = costWorkshop();
+    if(state.gold < c) return;
+    state.gold -= c; state.workshopLevel++;
+    toast('Oficina expandida para o nível ' + state.workshopLevel + '!', 'gold');
+    renderTop(); renderShop(); saveGame();
+  });
+
+  /* ============================= 3D SCENE ============================= */
+  const container = $('scene-container');
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x120d0a, 0.045);
+
+  const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
+  camera.position.set(0, 3.4, 7.5);
+  camera.lookAt(0, 0.6, 0);
+
+  const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  container.appendChild(renderer.domElement);
+
+  // Ground
+  const groundMat = new THREE.MeshStandardMaterial({ color:0x2a221a, roughness:0.95 });
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(14, 32), groundMat);
+  ground.rotation.x = -Math.PI/2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // Ambient + fill
+  scene.add(new THREE.AmbientLight(0x2a2018, 0.9));
+  const fillLight = new THREE.DirectionalLight(0x6b5a45, 0.35);
+  fillLight.position.set(-4, 6, -3);
+  scene.add(fillLight);
+
+  // Forge (furnace)
+  const forgeGroup = new THREE.Group();
+  const forgeBodyMat = new THREE.MeshStandardMaterial({ color:0x3a332c, roughness:0.85 });
+  const forgeBody = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.6, 1.6), forgeBodyMat);
+  forgeBody.position.set(-2.6, 0.8, -1.2);
+  forgeBody.castShadow = true; forgeBody.receiveShadow = true;
+  forgeGroup.add(forgeBody);
+
+  const emberMat = new THREE.MeshStandardMaterial({ color:0xff5a1a, emissive:0xff5a1a, emissiveIntensity:1.4, roughness:0.4 });
+  const emberBed = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.15, 1.2), emberMat);
+  emberBed.position.set(-2.6, 1.62, -1.2);
+  forgeGroup.add(emberBed);
+
+  const fireLight = new THREE.PointLight(0xff6a20, 2.4, 9, 2);
+  fireLight.position.set(-2.6, 1.9, -1.0);
+  fireLight.castShadow = true;
+  forgeGroup.add(fireLight);
+  scene.add(forgeGroup);
+
+  // Chimney hint (simple stack)
+  const chimney = new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.4,2.4,10), forgeBodyMat);
+  chimney.position.set(-2.6, 2.8, -1.7);
+  scene.add(chimney);
+
+  // Anvil
+  const anvilMat = new THREE.MeshStandardMaterial({ color:0x1e1c1a, metalness:0.8, roughness:0.35 });
+  const anvilGroup = new THREE.Group();
+  const anvilBase = new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.42,0.5,12), anvilMat);
+  anvilBase.position.y = 0.25;
+  const anvilTop = new THREE.Mesh(new THREE.BoxGeometry(1.3,0.28,0.55), anvilMat);
+  anvilTop.position.y = 0.64;
+  const anvilHorn = new THREE.Mesh(new THREE.ConeGeometry(0.16,0.6,10), anvilMat);
+  anvilHorn.rotation.z = Math.PI/2;
+  anvilHorn.position.set(0.85, 0.64, 0);
+  anvilGroup.add(anvilBase, anvilTop, anvilHorn);
+  anvilGroup.position.set(0.3, 0, 0.4);
+  anvilGroup.traverse(o=>{ if(o.isMesh){o.castShadow=true;o.receiveShadow=true;} });
+  scene.add(anvilGroup);
+
+  // Metal piece on anvil (heat glow object) — shape depends on the weapon being forged
+  const metalMat = new THREE.MeshStandardMaterial({ color:0x555555, emissive:0x000000, roughness:0.4, metalness:0.6 });
+  const ANVIL_TOP = new THREE.Vector3(0.3, 0.86, 0.4);
+
+  function buildMetalGroup(kind){
+    const g = new THREE.Group();
+    function part(w,h,d,x,y,z){
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), metalMat);
+      m.position.set(x,y,z); m.castShadow = true;
+      g.add(m); return m;
+    }
+    switch(kind){
+      case 'dagger':
+        part(0.32,0.07,0.09, 0,0,0);
+        break;
+      case 'sword':
+        part(0.7,0.09,0.1, 0.05,0,0);
+        part(0.14,0.05,0.24, -0.31,0,0);
+        break;
+      case 'axe': {
+        const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.035,0.62,8), metalMat);
+        handle.rotation.z = Math.PI/2; handle.castShadow = true;
+        g.add(handle);
+        part(0.28,0.34,0.05, 0.24,0.08,0);
+        break;
+      }
+      case 'warhammer': {
+        const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,0.58,8), metalMat);
+        handle.rotation.z = Math.PI/2; handle.castShadow = true;
+        g.add(handle);
+        part(0.24,0.24,0.24, 0.26,0,0);
+        break;
+      }
+      case 'greatsword':
+        part(1.02,0.1,0.13, 0.06,0,0);
+        part(0.16,0.06,0.28, -0.44,0,0);
+        break;
+      default: // ingot
+        part(0.5,0.12,0.14, 0,0,0);
+    }
+    return g;
+  }
+
+  let currentMetalGroup = buildMetalGroup('ingot');
+  currentMetalGroup.position.copy(ANVIL_TOP);
+  scene.add(currentMetalGroup);
+
+  function disposeGroup(g){ g.traverse(o => { if(o.isMesh) o.geometry.dispose(); }); }
+
+  function setMetalKind(kind){
+    scene.remove(currentMetalGroup);
+    disposeGroup(currentMetalGroup);
+    currentMetalGroup = buildMetalGroup(kind);
+    currentMetalGroup.position.copy(ANVIL_TOP);
+    scene.add(currentMetalGroup);
+  }
+
+  function resetMetalToIngot(){
+    setMetalKind('ingot');
+    metalMat.color.set(0x555555);
+    metalMat.emissive.set(0x000000);
+  }
+
+  // Water quenching bucket
+  const bucketMat = new THREE.MeshStandardMaterial({ color:0x2e2015, roughness:0.9 });
+  const waterMat = new THREE.MeshStandardMaterial({ color:0x2f5f6e, roughness:0.2, metalness:0.1, transparent:true, opacity:0.85 });
+  const bucketGroup = new THREE.Group();
+  const bucketBody = new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.26,0.42,14), bucketMat);
+  bucketBody.position.y = 0.21;
+  const bucketWater = new THREE.Mesh(new THREE.CylinderGeometry(0.29,0.29,0.04,14), waterMat);
+  bucketWater.position.y = 0.41;
+  bucketGroup.add(bucketBody, bucketWater);
+  bucketGroup.position.set(1.55, 0, 1.15);
+  bucketGroup.traverse(o=>{ if(o.isMesh){o.castShadow=true;o.receiveShadow=true;} });
+  scene.add(bucketGroup);
+  const BUCKET_TOP = new THREE.Vector3(1.55, 0.44, 1.15);
+
+  // Environment dressing — back wall, tool rack, barrel, crate
+  const wallMat = new THREE.MeshStandardMaterial({ color:0x1c140e, roughness:1 });
+  const backWall = new THREE.Mesh(new THREE.PlaneGeometry(16, 6), wallMat);
+  backWall.position.set(0, 2.6, -4.2);
+  backWall.receiveShadow = true;
+  scene.add(backWall);
+
+  const woodMat = new THREE.MeshStandardMaterial({ color:0x4a3420, roughness:0.9 });
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(2.4,0.12,0.12), woodMat);
+  beam.position.set(2.6, 2.3, -3.9);
+  scene.add(beam);
+  const tongHandle1 = new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,0.7,6), new THREE.MeshStandardMaterial({color:0x2b2b2b, metalness:0.7, roughness:0.4}));
+  tongHandle1.position.set(2.1, 1.85, -3.9);
+  tongHandle1.rotation.z = 0.15;
+  scene.add(tongHandle1);
+  const tongHandle2 = tongHandle1.clone();
+  tongHandle2.position.set(3.0, 1.85, -3.9);
+  tongHandle2.rotation.z = -0.15;
+  scene.add(tongHandle2);
+
+  const barrelMat = new THREE.MeshStandardMaterial({ color:0x5a3d22, roughness:0.85 });
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.4,0.85,14), barrelMat);
+  barrel.position.set(3.1, 0.42, -0.6);
+  barrel.castShadow = true; barrel.receiveShadow = true;
+  scene.add(barrel);
+
+  const crateMat = new THREE.MeshStandardMaterial({ color:0x6b4a2a, roughness:0.9 });
+  const crate = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.6,0.6), crateMat);
+  crate.position.set(2.5, 0.3, 0.6);
+  crate.rotation.y = 0.4;
+  crate.castShadow = true; crate.receiveShadow = true;
+  scene.add(crate);
+
+  // Hammer
+  const hammerGroup = new THREE.Group();
+  const handleMat = new THREE.MeshStandardMaterial({ color:0x4a3420, roughness:0.9 });
+  const headMat = new THREE.MeshStandardMaterial({ color:0x2b2b2b, metalness:0.75, roughness:0.35 });
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.05,1.1,8), handleMat);
+  handle.position.y = 0.55;
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.42,0.2,0.2), headMat);
+  head.position.y = 1.08;
+  hammerGroup.add(handle, head);
+  hammerGroup.position.set(0.3, 0.9, 1.1);
+  hammerGroup.rotation.x = -0.9;
+  hammerGroup.traverse(o=>{ if(o.isMesh) o.castShadow = true; });
+  scene.add(hammerGroup);
+
+  // Generalized pooled particle system (used for sparks, steam and smoke)
+  function createParticleSystem(count, color, size, gravity, opacity){
+    const geo = new THREE.BufferGeometry();
+    const positions = new Float32Array(count*3);
+    const vel = [];
+    for(let i=0;i<count;i++){
+      positions[i*3]=0; positions[i*3+1]=-50; positions[i*3+2]=0;
+      vel.push({vx:0,vy:0,vz:0, life:0});
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(positions,3));
+    const mat = new THREE.PointsMaterial({ color, size, transparent:true, opacity:opacity||0.9 });
+    const pts = new THREE.Points(geo, mat);
+    scene.add(pts);
+
+    function trigger(origin, n, spread, upBias){
+      let placed = 0;
+      for(let i=0;i<count && placed<n;i++){
+        if(vel[i].life <= 0){
+          vel[i].life = 0.45 + Math.random()*0.45;
+          vel[i].vx = (Math.random()-0.5)*spread;
+          vel[i].vy = Math.random()*spread*0.6 + (upBias||0.4);
+          vel[i].vz = (Math.random()-0.5)*spread;
+          positions[i*3] = origin.x;
+          positions[i*3+1] = origin.y;
+          positions[i*3+2] = origin.z;
+          placed++;
+        }
+      }
+    }
+    function update(dt){
+      const arr = geo.attributes.position.array;
+      for(let i=0;i<count;i++){
+        if(vel[i].life > 0){
+          vel[i].life -= dt;
+          vel[i].vy += gravity*dt;
+          arr[i*3] += vel[i].vx*dt;
+          arr[i*3+1] += vel[i].vy*dt;
+          arr[i*3+2] += vel[i].vz*dt;
+          if(vel[i].life <= 0) arr[i*3+1] = -50;
+        }
+      }
+      geo.attributes.position.needsUpdate = true;
+    }
+    return { trigger, update };
+  }
+
+  const sparkSystem = createParticleSystem(60, 0xffcf7a, 0.06, -4.2, 0.9);
+  const steamSystem = createParticleSystem(50, 0xd8d3c9, 0.11, -0.35, 0.55);
+  const smokeSystem = createParticleSystem(30, 0x8a8378, 0.16, -0.15, 0.3);
+
+  function triggerSparks(big){
+    const n = big ? 34 : 16;
+    sparkSystem.trigger(ANVIL_TOP, n, 2.2, 0.6);
+  }
+  function triggerSteam(){
+    steamSystem.trigger(BUCKET_TOP, 30, 1.6, 1.0);
+  }
+
+  let smokeAccum = 0;
+  const CHIMNEY_TOP = new THREE.Vector3(-2.6, 4.05, -1.7);
+
+  function triggerHammerSwing(){
+    hammerSwingT = 0;
+    hammerSwinging = true;
+  }
+  let hammerSwingT = 0;
+  let hammerSwinging = false;
+
+  function triggerDip(){
+    dipT = 0; dipping = true;
+  }
+  let dipT = 0;
+  let dipping = false;
+
+  function triggerShake(mag){
+    if(state.settings.reduceMotion) return;
+    shakeTime = 0.18;
+    shakeMag = mag;
+  }
+  let shakeTime = 0;
+  let shakeMag = 0;
+
+  /* Camera dynamic framing per forging phase */
+  const camBase = { x:0, y:3.4, z:7.5, look:0.7 };
+  function cameraTargetForPhase(){
+    if(!state.forging) return { x:0, y:3.4, z:7.5, look:0.7 };
+    switch(state.forging.phase){
+      case 'heating': return { x:-1.1, y:2.75, z:5.3, look:0.9 };
+      case 'hammering': return { x:0.55, y:2.05, z:3.9, look:0.78 };
+      case 'quenching': return { x:0.9, y:1.9, z:3.4, look:0.65 };
+      default: return { x:0, y:3.4, z:7.5, look:0.7 };
+    }
+  }
+
+  let camT = 0;
+  const clock = new THREE.Clock();
+
+  function animate(){
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.05);
+
+    // fire flicker tied to forge heat
+    const heat = state.forging ? state.forging.heat : 20;
+    const flicker = 1.8 + Math.sin(performance.now()*0.01)*0.25 + Math.random()*0.15;
+    fireLight.intensity = flicker * (0.6 + heat/100);
+    emberMat.emissiveIntensity = 1.0 + heat/60;
+
+    // metal piece color by heat
+    if(state.forging && state.forging.phase !== 'done'){
+      const t = heat/100;
+      const c = new THREE.Color(0x555555).lerp(new THREE.Color(0xff6a20), Math.min(1,t*1.3)).lerp(new THREE.Color(0xfff2c0), Math.max(0,(t-0.75)*4));
+      metalMat.color.copy(c);
+      metalMat.emissive.copy(new THREE.Color(0xff3300)).multiplyScalar(Math.max(0,(t-0.35))*0.9);
+    }
+
+    // hammer swing animation
+    if(hammerSwinging){
+      hammerSwingT += dt*5.5;
+      const s = Math.sin(Math.min(hammerSwingT, Math.PI));
+      hammerGroup.rotation.x = -0.9 - s*0.9;
+      if(hammerSwingT >= Math.PI){ hammerSwinging = false; hammerGroup.rotation.x = -0.9; }
+    }
+
+    // quench dip animation
+    if(dipping){
+      dipT += dt*2.6;
+      const s = Math.sin(Math.min(dipT, Math.PI));
+      currentMetalGroup.position.y = ANVIL_TOP.y - s*0.55;
+      currentMetalGroup.position.x = ANVIL_TOP.x + s*1.1;
+      currentMetalGroup.position.z = ANVIL_TOP.z + s*0.7;
+      if(dipT >= Math.PI){ dipping = false; currentMetalGroup.position.copy(ANVIL_TOP); }
+    }
+
+    // particle physics
+    sparkSystem.update(dt);
+    steamSystem.update(dt);
+    smokeSystem.update(dt);
+
+    // ambient chimney smoke
+    smokeAccum += dt;
+    if(smokeAccum > 0.5){
+      smokeAccum = 0;
+      smokeSystem.trigger(CHIMNEY_TOP, 2, 0.5, 0.5 + (heat/100)*0.6);
+    }
+
+    // camera: smooth transition toward phase target, plus gentle sway and impact shake
+    const tgt = cameraTargetForPhase();
+    const lerpF = 1 - Math.pow(0.0008, dt);
+    camBase.x += (tgt.x - camBase.x) * lerpF;
+    camBase.y += (tgt.y - camBase.y) * lerpF;
+    camBase.z += (tgt.z - camBase.z) * lerpF;
+    camBase.look += (tgt.look - camBase.look) * lerpF;
+
+    camT += dt*0.15;
+    const swayAmp = state.settings.reduceMotion ? 0 : 0.32;
+    let shakeX = 0, shakeY = 0;
+    if(shakeTime > 0){
+      shakeTime -= dt;
+      const s = Math.max(0, shakeTime) * shakeMag * 6;
+      shakeX = (Math.random()-0.5) * s;
+      shakeY = (Math.random()-0.5) * s;
+    }
+
+    camera.position.x = camBase.x + Math.sin(camT)*swayAmp + shakeX;
+    camera.position.y = camBase.y + Math.sin(camT*0.7)*(swayAmp*0.19) + shakeY;
+    camera.position.z = camBase.z;
+    camera.lookAt(0, camBase.look, 0);
+
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  /* ============================= KEYBOARD SHORTCUT ============================= */
+  window.addEventListener('keydown', (e) => {
+    if(e.code !== 'Space') return;
+    if(el.shopOverlay.classList.contains('active')) return;
+    const f = state.forging;
+    if(!f) return;
+    e.preventDefault();
+    if(f.phase === 'heating' && !el.btnPump.disabled) el.btnPump.click();
+    else if(f.phase === 'hammering') el.btnStrike.click();
+    else if(f.phase === 'quenching') el.btnQuench.click();
+  });
+
+  /* ============================= INIT ============================= */
+  const hadSave = loadGame();
+  renderTop();
+  renderShop();
+  renderOrderIdle();
+  toast(hadSave ? 'Progresso carregado! Bem-vindo de volta, ferreiro.' : 'Bem-vindo à sua oficina! Chame o primeiro aventureiro.', null);
+
+  setInterval(saveGame, 20000);
+  window.addEventListener('beforeunload', saveGame);
+
+})();
+</script>
+</body>
+</html>
